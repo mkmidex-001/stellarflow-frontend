@@ -11,11 +11,64 @@ import React, {
 
 export type NetworkTarget = "testnet" | "mainnet";
 
+/** Per-network endpoint + passphrase bundle, keyed by `NetworkTarget`. */
+export interface NetworkConfig {
+  horizonUrl: string;
+  sorobanUrl: string;
+  networkPassphrase: string;
+}
+
+/** Static network configuration, usable outside a `NetworkProvider`. */
+export const NETWORK_CONFIGS: Record<NetworkTarget, NetworkConfig> = {
+  testnet: {
+    horizonUrl: "https://horizon-testnet.stellar.org",
+    sorobanUrl: "https://soroban-testnet.stellar.org",
+    networkPassphrase: "Test SDF Network ; September 2015",
+  },
+  mainnet: {
+    horizonUrl: "https://horizon.stellar.org",
+    sorobanUrl: "https://soroban-mainnet.stellar.org",
+    networkPassphrase: "Public Global Stellar Network ; September 2015",
+export interface NetworkConfig {
+  /** Human-readable network label. */
+  label: string;
+  network: NetworkTarget;
+  /** Passphrase transactions are signed against. */
+  networkPassphrase: string;
+  horizonUrl: string;
+  sorobanRpcUrl: string;
+}
+
+/**
+ * Static per-network configuration table shared by hooks/components that need
+ * endpoint details without subscribing to the provider (they fall back to
+ * `NETWORK_CONFIGS[network]` when rendered outside `<NetworkProvider>`).
+ */
+export const NETWORK_CONFIGS: Record<NetworkTarget, NetworkConfig> = {
+  testnet: {
+    label: "Testnet",
+    network: "testnet",
+    networkPassphrase: "Test SDF Network ; September 2015",
+    horizonUrl: "https://horizon-testnet.stellar.org",
+    sorobanRpcUrl: "https://soroban-testnet.stellar.org",
+  },
+  mainnet: {
+    label: "Public",
+    network: "mainnet",
+    networkPassphrase: "Public Global Stellar Network ; September 2015",
+    horizonUrl: "https://horizon.stellar.org",
+    sorobanRpcUrl: "https://soroban-mainnet.stellar.org",
+  },
+};
+
 interface NetworkContextType {
   network: NetworkTarget;
   horizonUrl: string;
   sorobanUrl: string;
   customHorizonUrl: string;
+  /** Resolved config for the active network, following any custom endpoint. */
+  /** Active network config (honours a custom Horizon endpoint when set). */
+  config: NetworkConfig;
 }
 
 interface NetworkActionsType {
@@ -169,12 +222,18 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
     setError(null);
   }, []);
 
-  const contextValue = useMemo(
+  const contextValue = useMemo<NetworkContextType>(
     () => ({
       network,
       horizonUrl,
       sorobanUrl,
       customHorizonUrl,
+      config: {
+        ...NETWORK_CONFIGS[network],
+        horizonUrl,
+        sorobanUrl,
+      },
+      config: { ...NETWORK_CONFIGS[network], horizonUrl },
     }),
     [network, horizonUrl, sorobanUrl, customHorizonUrl],
   );
@@ -214,6 +273,19 @@ export function useNetwork() {
     throw new Error("useNetwork must be used within a NetworkProvider");
   }
   return context;
+}
+
+/**
+ * Read the network context without requiring a `NetworkProvider` ancestor.
+ * Returns `null` when rendered outside the provider so standalone pages
+ * (diagnostics, RPC benchmark) can fall back to their own defaults.
+ */
+export function useOptionalNetwork(): NetworkContextType | undefined {
+ * Non-throwing variant for components/hooks that must also render outside a
+ * `<NetworkProvider>` (diagnostics page, RPC health checks, wallet panels).
+ */
+export function useOptionalNetwork() {
+  return useContext(NetworkContext);
 }
 
 export function useNetworkActions() {
